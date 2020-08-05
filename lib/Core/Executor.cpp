@@ -24,6 +24,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "Polycheck.h"
 
 #include "klee/ADT/RNG.h"
 #include "klee/Config/Version.h"
@@ -626,6 +627,7 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
     os->write8(i, ((uint8_t*)addr)[i]);
   if(isReadOnly)
     os->setReadOnly(true);  
+  polycheck->registerExternal(*mo);
   return mo;
 }
 
@@ -747,6 +749,7 @@ void Executor::allocateGlobalObjects(ExecutionState &state) {
                                         /*alignment=*/globalObjectAlignment);
     if (!mo)
       klee_error("out of memory");
+    polycheck->registerGlobal(mo);
     globalObjects.emplace(&v, mo);
     globalAddresses.emplace(&v, mo->getBaseExpr());
   }
@@ -1640,7 +1643,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
         terminateStateOnExecError(state, "out of memory (varargs)");
         return;
       }
-
+      polycheck->registerVararg(*mo);
       if (mo) {
         if ((WordSize == Expr::Int64) && (mo->address & 15) &&
             requires16ByteAlignment) {
@@ -3497,6 +3500,7 @@ void Executor::executeAlloc(ExecutionState &state,
       bindLocal(target, state, 
                 ConstantExpr::alloc(0, Context::get().getPointerWidth()));
     } else {
+      polycheck->registerAlloc(*mo,state.precPC);
       ObjectState *os = bindObjectInState(state, mo, isLocal);
       if (zeroMemory) {
         os->initializeToZero();
@@ -3896,7 +3900,7 @@ void Executor::runFunctionAsMain(Function *f,
 
       if (!argvMO)
         klee_error("Could not allocate memory for function arguments");
-
+      polycheck->registerArgv(*argvMO);
       arguments.push_back(argvMO->getBaseExpr());
 
       if (++ai!=ae) {
@@ -3940,6 +3944,7 @@ void Executor::runFunctionAsMain(Function *f,
                              /*allocSite=*/state->pc->inst, /*alignment=*/8);
         if (!arg)
           klee_error("Could not allocate memory for function arguments");
+        polycheck->registerArgc(*arg);
         ObjectState *os = bindObjectInState(*state, arg, false);
         for (j=0; j<len+1; j++)
           os->write8(j, s[j]);

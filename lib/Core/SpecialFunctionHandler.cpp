@@ -16,6 +16,7 @@
 #include "MergeHandler.h"
 #include "Searcher.h"
 #include "TimingSolver.h"
+#include "Polycheck.h"
 
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
@@ -109,6 +110,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("klee_stack_trace", handleStackTrace, false),
   add("klee_warning", handleWarning, false),
   add("klee_warning_once", handleWarningOnce, false),
+  add("klee_typecheck", handleTypecheck, false),
   add("malloc", handleMalloc, true),
   add("memalign", handleMemalign, true),
   add("realloc", handleRealloc, true),
@@ -875,4 +877,12 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
                                                std::vector<ref<Expr> > &arguments) {
   executor.terminateStateOnError(state, "overflow on division or remainder",
                                  Executor::Overflow);
+}
+
+void SpecialFunctionHandler::handleTypecheck(
+    ExecutionState &state,
+    KInstruction* target,
+    std::vector<ref<Expr>> &arguments) {
+  assert(arguments.size() == 2);
+  executor.polycheck->handleTypecheck(state, executor, target, arguments[0], arguments[1]);
 }

@@ -12,6 +12,7 @@ add_executable(klee
 
 set(KLEE_LIBS
   kleeCore
+  dl
 )
 
 target_link_libraries(klee ${KLEE_LIBS})

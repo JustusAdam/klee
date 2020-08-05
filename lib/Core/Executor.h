@@ -78,6 +78,7 @@ namespace klee {
   class MergeHandler;
   class MergingSearcher;
   template<class T> class ref;
+  class Polycheck;
 
 
 
@@ -91,6 +92,7 @@ class Executor : public Interpreter {
   friend class SpecialFunctionHandler;
   friend class StatsTracker;
   friend class MergeHandler;
+  friend class Polycheck;
   friend klee::Searcher *klee::constructUserSearcher(Executor &executor);
 
 public:
@@ -125,6 +127,7 @@ private:
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;
   MemoryManager *memory;
+  Polycheck *polycheck;
   std::set<ExecutionState*, ExecutionStateIDCompare> states;
   StatsTracker *statsTracker;
   TreeStreamWriter *pathWriter, *symPathWriter;
