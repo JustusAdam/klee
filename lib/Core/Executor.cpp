@@ -749,7 +749,7 @@ void Executor::allocateGlobalObjects(ExecutionState &state) {
                                         /*alignment=*/globalObjectAlignment);
     if (!mo)
       klee_error("out of memory");
-    polycheck->registerGlobal(mo);
+    polycheck->registerGlobal(*mo);
     globalObjects.emplace(&v, mo);
     globalAddresses.emplace(&v, mo->getBaseExpr());
   }
@@ -3500,7 +3500,7 @@ void Executor::executeAlloc(ExecutionState &state,
       bindLocal(target, state, 
                 ConstantExpr::alloc(0, Context::get().getPointerWidth()));
     } else {
-      polycheck->registerAlloc(*mo,state.precPC);
+      polycheck->registerAlloc(*mo,*state.prevPC);
       ObjectState *os = bindObjectInState(state, mo, isLocal);
       if (zeroMemory) {
         os->initializeToZero();

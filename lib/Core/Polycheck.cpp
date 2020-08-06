@@ -22,7 +22,7 @@ using namespace klee;
 
 Polycheck::Polycheck() : allocMap(new Polycheck::alloc_map()) {}
 
-Polycheck::Polycheck(Polycheck &&pc) : allocMap(pc.allocMap) {}
+Polycheck::Polycheck(Polycheck &&pc) = default;
 
 void Polycheck::init_type_map() {
     if (typeMap != nullptr) return;
@@ -32,32 +32,44 @@ void Polycheck::init_type_map() {
     std::ifstream f((MetaBasePath + ".allocs").c_str());
 
     std::string buf;
+    buf.reserve(200);
 
-    void * dlhandle = dlopen((MetaBasePath + ".so").c_str(), RTLD_LAZY);
+    void * dlhandle = dlopen((MetaBasePath + "-meta.so").c_str(), RTLD_LAZY);
+
+    assert(dlhandle);
 
     while (!f.eof()) {
 
         for (unsigned i=0; i<3;i++) {
-            getline(f, buf, ' ');
-            while (f.get() == ' ') {}
-            f.unget();
+            getline(f, buf, '\t');
+            buf.clear();
         }
 
         auto file = new std::string();
-        getline(f, *file, ' ');
+        getline(f, *file, '\t');
+
+        assert(!file->empty());
 
         unsigned line_start;
         f >> line_start;
 
         unsigned line_end;
         f >> line_end;
-        
-        while (f.get() == ' ') {}
-        f.unget();
 
-        getline(f, buf, ' ');
+        assert(f.get() == '\t');
+        getline(f, buf, '\t');
+
+        printf("ignoring %s\n", buf.c_str());
+        buf.clear();
+        
+        getline(f, buf, '\t');
 
         auto type = (t*) dlsym(dlhandle, buf.c_str());
+
+
+        printf("file? %s line %i-%i typename '%s'\n", file->c_str(), line_start, line_end, buf.c_str());
+
+        assert(type);
 
         f.ignore('\n');
 
@@ -70,7 +82,18 @@ void Polycheck::init_type_map() {
             *type
         );
     }
+    printf("Type map loaded!\n");
 }
+
+bool Polycheck::loc::operator<(const struct loc& rhs) const {
+    return file < rhs.file && line_start < rhs.line_start && line_end < rhs.line_end;
+}
+
+std::string Polycheck::loc::as_string() const {
+    return file + ":" + std::to_string(line_start) + "-" + std::to_string(line_end);
+}
+
+Polycheck::type_map * Polycheck::typeMap = nullptr;
 
 const Polycheck::t * Polycheck::resolveType(const Polycheck::loc& loc) {
     if (typeMap == nullptr)
@@ -85,11 +108,11 @@ const Polycheck::t * Polycheck::resolveType(const Polycheck::loc& loc) {
     }
 }
 
-void registerExternal(const MemoryObject &mo) {}
-void registerGlobal(const MemoryObject &mo) {}
-void registerVararg(const MemoryObject &mo) {}
-void registerArgv(const MemoryObject &mo) {}
-void registerArgc(const MemoryObject &mo) {}
+void Polycheck::registerExternal(const MemoryObject &mo) {}
+void Polycheck::registerGlobal(const MemoryObject &mo) {}
+void Polycheck::registerVararg(const MemoryObject &mo) {}
+void Polycheck::registerArgv(const MemoryObject &mo) {}
+void Polycheck::registerArgc(const MemoryObject &mo) {}
 
 void Polycheck::registerAlloc(const MemoryObject& mo, const KInstruction& allocSite) {
     // This is proabably wrong
@@ -100,11 +123,15 @@ void Polycheck::registerAlloc(const MemoryObject& mo, const KInstruction& allocS
     };
     const t* type = resolveType(loc);
 
-    recordAllocationInfo(std::make_pair(mo, type));
+    recordAllocationInfo(allocation_info { 
+        .mem_obj = mo,
+        .type = type
+    });
 }
 
-void Polycheck::recordAllocationInfo(allocation_info i) {
-    allocMap->emplace(i.first.address, i);
+void Polycheck::recordAllocationInfo(const Polycheck::allocation_info i) {
+    assert(allocMap);
+    allocMap->emplace(i.mem_obj.address, i);
 }
 
 void Polycheck::handleTypecheck(
@@ -120,13 +147,13 @@ void Polycheck::handleTypecheck(
   const Polycheck::t &argtype = resolveTypeFromLoc(loc); */
   ObjectPair result;
   assert(state.addressSpace.resolveOne(e1, result));
-  const t* argtype = lookupAllocation(*result.first).second;
+  const t* argtype = lookupAllocation(*result.first).type;
   Executor::ExactResolutionList resolutions;
   executor.resolveExact(state, arg2, resolutions, "unnamed");
   for (auto &it : resolutions) {
     // This also gives me a new ExecutionState, do I need to do something with that?
     executor.polycheck->typecheck(argtype, 
-     lookupAllocation(*it.first.first).second // this is probably wrong, I think I may have to get the offset from the object state as well
+     lookupAllocation(*it.first.first).type // this is probably wrong, I think I may have to get the offset from the object state as well
      );
   }
 }
@@ -149,4 +176,13 @@ bool Polycheck::typecheck(const t* target, const t * examined) {
         &cumulative_offset_searched, 
         &cur_containing_uniqtype, 
         &cur_contained_pos);
+}
+
+const Polycheck::allocation_info& Polycheck::lookupAllocation(const MemoryObject& mo) {
+    auto res = allocMap->find(mo.address);
+
+    if (res == allocMap->end())
+        klee_error("Looking up an allocation failed at address %lu", mo.address);
+    else
+        return res->second;
 }

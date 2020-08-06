@@ -6,9 +6,10 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===*/
-
 #ifndef KLEE_H
 #define KLEE_H
+
+#pragma cilnoremove("klee_typecheck")
 
 #include "stdint.h"
 #include "stddef.h"

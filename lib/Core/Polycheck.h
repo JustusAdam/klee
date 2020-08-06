@@ -1,4 +1,5 @@
 #include "Memory.h"
+#include "klee/Module/KInstruction.h"
 
 #include "uniqtype-defs.h"
 
@@ -35,8 +36,12 @@ private:
         unsigned line_end;
 
         std::string as_string() const;
+        bool operator<(const struct loc & rhs) const;
     } loc;
-    typedef std::pair<const MemoryObject&, const t*> allocation_info;
+    typedef struct allocation_info { 
+        const MemoryObject& mem_obj;
+        const t* type; 
+    } allocation_info;
     typedef std::map<loc, t> type_map;
     typedef std::map<address, allocation_info> alloc_map;
 
