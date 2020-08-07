@@ -30,34 +30,42 @@ public:
 
 
 private:
+    typedef std::string index;
     typedef struct loc {
         const std::string & file;
         unsigned line_start;
         unsigned line_end;
 
         std::string as_string() const;
-        bool operator<(const struct loc & rhs) const;
+
+        const index as_index() const;
     } loc;
     typedef struct alloc_site_info {
         const t* type;
         const std::string& type_name;
         const std::string& alloc_type;
+        const loc alloc_loc;
     } alloc_site_info_t;
     typedef struct allocation_info { 
         const MemoryObject& mem_obj;
-        const alloc_site_info_t & site_info;
+        const alloc_site_info_t * site_info;
     } allocation_info;
-    typedef std::map<loc, alloc_site_info_t> type_map;
-    typedef std::map<address, const allocation_info> alloc_map;
+    typedef std::unordered_map<index, const alloc_site_info_t*> type_map;
+    typedef std::unordered_map<address, const allocation_info*> alloc_map;
 
     static type_map * typeMap;
 
     static void init_type_map();
-    static const alloc_site_info_t & resolveInfo(const loc& loc);
+    static const alloc_site_info_t * resolveInfo(const loc& loc);
+    static void dump_type_map();
+    static char* __wd;
+    static const std::string get_wd();
 
     alloc_map * allocMap;
 
-    void recordAllocationInfo(const MemoryObject& mo, const alloc_site_info_t & info);
+    void recordAllocationInfo(
+        const MemoryObject& mo, 
+        const alloc_site_info_t * info);
 
     bool typecheck(const t* target, const t* examined);
     const t& resolveTypeFromLoc(const klee_loc& loc);
