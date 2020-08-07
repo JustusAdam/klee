@@ -38,21 +38,26 @@ private:
         std::string as_string() const;
         bool operator<(const struct loc & rhs) const;
     } loc;
+    typedef struct alloc_site_info {
+        const t* type;
+        const std::string& type_name;
+        const std::string& alloc_type;
+    } alloc_site_info_t;
     typedef struct allocation_info { 
         const MemoryObject& mem_obj;
-        const t* type; 
+        const alloc_site_info_t & site_info;
     } allocation_info;
-    typedef std::map<loc, t> type_map;
-    typedef std::map<address, allocation_info> alloc_map;
+    typedef std::map<loc, alloc_site_info_t> type_map;
+    typedef std::map<address, const allocation_info> alloc_map;
 
     static type_map * typeMap;
 
     static void init_type_map();
-    static const t * resolveType(const loc& loc);
+    static const alloc_site_info_t & resolveInfo(const loc& loc);
 
     alloc_map * allocMap;
 
-    void recordAllocationInfo(allocation_info i);
+    void recordAllocationInfo(const MemoryObject& mo, const alloc_site_info_t & info);
 
     bool typecheck(const t* target, const t* examined);
     const t& resolveTypeFromLoc(const klee_loc& loc);
