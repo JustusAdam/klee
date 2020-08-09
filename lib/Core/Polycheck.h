@@ -38,6 +38,7 @@ private:
 
         std::string as_string() const;
 
+        const index as_index(unsigned i) const;
         const index as_index() const;
     } loc;
     typedef struct alloc_site_info {
@@ -46,17 +47,18 @@ private:
         const std::string& alloc_type;
         const loc alloc_loc;
     } alloc_site_info_t;
+    typedef std::vector<alloc_site_info_t> type_map_record;
     typedef struct allocation_info { 
         const MemoryObject& mem_obj;
-        const alloc_site_info_t * site_info;
+        const type_map_record * site_info;
     } allocation_info;
-    typedef std::unordered_map<index, const alloc_site_info_t*> type_map;
+    typedef std::unordered_map<index, const type_map_record *> type_map;
     typedef std::unordered_map<address, const allocation_info*> alloc_map;
 
     static type_map * typeMap;
 
     static void init_type_map();
-    static const alloc_site_info_t * resolveInfo(const loc& loc);
+    static const type_map_record * resolveInfo(const loc& loc);
     static void dump_type_map();
     static char* __wd;
     static const std::string get_wd();
@@ -65,9 +67,9 @@ private:
 
     void recordAllocationInfo(
         const MemoryObject& mo, 
-        const alloc_site_info_t * info);
+        const type_map_record * info);
 
-    bool typecheck(const t* target, const t* examined);
+    static bool typecheck(const t* target, const t* examined);
     const t& resolveTypeFromLoc(const klee_loc& loc);
     const allocation_info& lookupAllocation(const MemoryObject& mo);
 };

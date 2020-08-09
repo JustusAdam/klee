@@ -82,22 +82,31 @@ void Polycheck::init_type_map()
                 .line_start = line_start,
                 .line_end = line_end
             };
-
-        typeMap->emplace(
-            the_loc.as_index(),
-            new alloc_site_info_t {
-                .type = type,
-                .type_name = *type_name,
-                .alloc_type = *alloc_type,
-                .alloc_loc = the_loc
+        for (unsigned i = line_start; i <= line_end; i++) {
+            auto it = typeMap->find(the_loc.as_index(i));
+            if (it == typeMap->end()) {
+                auto v = new type_map_record();
+                v->push_back(
+                    alloc_site_info_t {
+                        .type = type,
+                        .type_name = *type_name,
+                        .alloc_type = *alloc_type,
+                        .alloc_loc = the_loc
+                    }
+                );
+                typeMap->emplace(the_loc.as_index(i), v);
             }
-        );
+        }
     }
     printf("Type map loaded!\n");
+    dump_type_map();
 }
 
+const Polycheck::index Polycheck::loc::as_index(unsigned i) const {
+    return file + ":" + std::to_string(i);
+}
 const Polycheck::index Polycheck::loc::as_index() const {
-    return file + ":" + std::to_string(line_start);
+    return as_index(line_start);
 }
 
 std::string Polycheck::loc::as_string() const 
@@ -115,13 +124,13 @@ void Polycheck::dump_type_map()
     }
 }
 
-const Polycheck::alloc_site_info_t * Polycheck::resolveInfo(
+
+const Polycheck::type_map_record * Polycheck::resolveInfo(
     const Polycheck::loc& loc) 
 {
     if (typeMap == nullptr)
         init_type_map();
     printf("Searching for %s in\n", loc.as_index().c_str());
-    dump_type_map();
     auto result = typeMap->find(loc.as_index());
 
     if (result == typeMap->end()) {
@@ -159,26 +168,27 @@ void Polycheck::registerAlloc(
         .line_end = allocSite.info->line,
     };
     printf("Searching for allocation at %s:%u-%u\n", loc.file.c_str(), loc.line_start, loc.line_end);
-    auto info = resolveInfo(loc);
+    auto infos = resolveInfo(loc);
 
-    if (!info) {
+    if (!infos) {
         klee_warning("Could not find allocation info for %s", loc.as_index().c_str());
         return;
     }
 
-    printf("Found allocation at %s:%u-%u\n", info->alloc_loc.file.c_str(), info->alloc_loc.line_start, info->alloc_loc.line_end);
+    for (auto info : *infos)
+        printf("Found allocation at %s:%u-%u\n", info.alloc_loc.file.c_str(), info.alloc_loc.line_start, info.alloc_loc.line_end);
 
     assert(allocMap != nullptr);
 
     recordAllocationInfo(
         mo,
-        info
+        infos
     );
 }
 
 void Polycheck::recordAllocationInfo(
     const MemoryObject& mo, 
-    const alloc_site_info_t* info) 
+    const type_map_record * info) 
 {
     assert(allocMap != nullptr);
     printf("Size of map: %lu\n", allocMap->size());
@@ -203,25 +213,28 @@ void Polycheck::handleTypecheck(
     ObjectPair result;
     assert(state.addressSpace.resolveOne(e1, result));
     auto argtype = lookupAllocation(*result.first);
-    printf("Found target type (%s) allocated at %s:%u\n", argtype.site_info->type_name.c_str(), argtype.site_info->alloc_loc.file.c_str(), argtype.site_info->alloc_loc.line_start);
+    assert(argtype.site_info->size() == 1);
+    const alloc_site_info_t & arg_type_site = (*argtype.site_info)[0];
+    printf("Found target type (%s) allocated at %s:%u\n", arg_type_site.type_name.c_str(), arg_type_site.alloc_loc.file.c_str(), arg_type_site.alloc_loc.line_start);
     Executor::ExactResolutionList resolutions;
     executor.resolveExact(state, arg2, resolutions, "unnamed");
     for (auto &it : resolutions) {
         // This also gives me a new ExecutionState, do I need to do something with that?
-        auto alloc = lookupAllocation(*it.first.first);
-        printf("Found pointer type (%s) allocated at %s:%u\n", alloc.site_info->type_name.c_str(), alloc.site_info->alloc_loc.file.c_str(), alloc.site_info->alloc_loc.line_start);
-        if (typecheck(
-            argtype.site_info->type, 
-            alloc.site_info->type // this is probably wrong, I think I may have to get the offset from the object state as well
-            )) {
-            printf("%s is contained in %s (%s)\n", 
-                argtype.site_info->type_name.c_str(),
-                alloc.site_info->type_name.c_str(),
-                alloc.site_info->alloc_type.c_str());
-        } else {
-            klee_error("%s is not contained in %s", 
-                argtype.site_info->type_name.c_str(),
-                alloc.site_info->type_name.c_str());
+        auto allocs = lookupAllocation(*it.first.first);
+        bool succeded = true;
+        for (auto alloc : *allocs.site_info) {
+            succeded = succeded && typecheck(
+                arg_type_site.type,
+                alloc.type // this is probably wrong, I think I may have to get the offset from the object state as well
+                );
+        }
+
+        if (!succeded) {
+            printf("All candidate allocations failed containment test.\n");
+            for (auto &alloc : *allocs.site_info)
+                printf("%s (%s)\n", 
+                    alloc.type_name.c_str(),
+                    alloc.alloc_type.c_str());
         }
     }
 }
