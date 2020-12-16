@@ -275,6 +275,13 @@ void Polycheck::recordAllocationInfo(
     });
 }
 
+bool is_null_ptr(const Expr& arg) {
+    if (isa<ConstantExpr>(arg)) {
+        return (cast<ConstantExpr>(arg).getLimitedValue() == 0);
+    }
+    return false;
+}
+
 void Polycheck::handleTypecheck(
     ExecutionState &state,
     Executor &executor,
@@ -299,6 +306,12 @@ void Polycheck::handleTypecheck(
 
     const alloc_site_info_t & arg_type_site = (*argtype->site_info);
     printf("Found target type (%s) allocated at %s:%u\n", arg_type_site.type_name.c_str(), arg_type_site.alloc_loc.file.c_str(), arg_type_site.alloc_loc.line_start);
+    
+    if (is_null_ptr(*arg2)) {
+        klee_warning_once("NULL type", "NULL pointer is allowed to cast to any type.");
+        return;
+    }
+
     Executor::ExactResolutionList resolutions;
     executor.resolveExact(state, arg2, resolutions, "unnamed");
     for (auto &it : resolutions) {
